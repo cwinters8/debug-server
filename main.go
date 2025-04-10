@@ -64,7 +64,7 @@ func setupRouter() (*http.ServeMux, error) {
 }
 
 func main() {
-	if isLocal, err := strconv.ParseBool(os.Getenv("IS_LOCAL")); !isLocal || err != nil {
+	if isLocal, err := strconv.ParseBool(os.Getenv("IS_LOCAL")); isLocal || err == nil {
 		if err := godotenv.Load(); err != nil {
 			log.Fatalf("Error loading .env: %v", err)
 		}
