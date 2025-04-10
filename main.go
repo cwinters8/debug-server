@@ -6,19 +6,27 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
-// Response represents the JSON response structure
 type Response struct {
 	Status string `json:"status"`
 }
 
-// writeJSONResponse is a helper function to write JSON responses
-func writeJSONResponse(w http.ResponseWriter, status int, payload interface{}) {
+func writeJSONResponse(w http.ResponseWriter, r *http.Request, status int, payload interface{}) {
+	// Set CORS headers for pre-flight requests
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(status)
 
 	err := json.NewEncoder(w).Encode(payload)
@@ -27,9 +35,8 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload interface{}) {
 	}
 }
 
-// healthHandler handles the /health route
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSONResponse(w, http.StatusOK, Response{Status: "ok"})
+	writeJSONResponse(w, r, http.StatusOK, Response{Status: "ok"})
 }
 
 func getSecureHandler() (func(w http.ResponseWriter, r *http.Request), error) {
@@ -40,14 +47,13 @@ func getSecureHandler() (func(w http.ResponseWriter, r *http.Request), error) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
 		if token != authToken {
-			writeJSONResponse(w, http.StatusUnauthorized, Response{Status: "unauthorized"})
+			writeJSONResponse(w, r, http.StatusUnauthorized, Response{Status: "unauthorized"})
 			return
 		}
-		writeJSONResponse(w, http.StatusOK, Response{Status: "secured"})
+		writeJSONResponse(w, r, http.StatusOK, Response{Status: "secured"})
 	}, nil
 }
 
-// setupRouter sets up the routes and returns the router
 func setupRouter() (*http.ServeMux, error) {
 	router := http.NewServeMux()
 
@@ -56,7 +62,6 @@ func setupRouter() (*http.ServeMux, error) {
 		return nil, err
 	}
 
-	// Register routes
 	router.HandleFunc("/health", healthHandler)
 	router.HandleFunc("/secure", secureHandler)
 
@@ -64,7 +69,9 @@ func setupRouter() (*http.ServeMux, error) {
 }
 
 func main() {
-	if isLocal, err := strconv.ParseBool(os.Getenv("IS_LOCAL")); isLocal || err == nil {
+	// Only load .env if it exists
+	if _, err := os.Stat(".env"); err == nil {
+		log.Printf("Loading .env")
 		if err := godotenv.Load(); err != nil {
 			log.Fatalf("Error loading .env: %v", err)
 		}
